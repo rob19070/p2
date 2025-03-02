@@ -25,6 +25,11 @@ forward HasGoldenSet(plrid);
 forward HasSkullBlade(plrid);
 forward HasLuckBracelet(plrid);
 
+GetPermanentID(plrid) {
+    shset(0, "pid");
+    return gsGetFlag(plrid, 0);
+}
+
 checkPlayerSets(MapID, NPCID, PlayerID) {
     gsConvBegin();
     
@@ -217,23 +222,23 @@ getRankTitle(rank) {
 gmResetRankRewards(PlayerID) {
     new pid = GetPermanentID(PlayerID);
     
-    // Reset claimed ranks flag
+    if(!isgm(PlayerID)) {
+        return;
+    }
+    
+    // Reset ONLY the claimed ranks flag for this specific player
     shset(0, "spy_rank_reward_claimed_");
     shappendn(0, pid);
-    gsSetFlag(0, 0, 0);
+    gsSetFlag(0, 0, 0);  // Explicitly set to 0
     
-    // Reset pit rank flag
-    shset(0, RANK_FLAG);
-    shappendn(0, pid);
-    gsSetFlag(0, 0, 0);
-    
-    shset(0, "All pit rank and reward flags have been reset.");
+    shset(0, "Pit rank reward claims have been reset. You can now claim rewards again.");
     gsStatusMessage(PlayerID, 0);
 }
 
 InitConv(MapID, NPCID, PlayerID) {
-    // Get player's pit rank
     new pid = GetPermanentID(PlayerID);
+    
+    // Get player's pit rank
     shset(0, RANK_FLAG);
     shappendn(0, pid);
     new currentRank = gsGetFlag(0, 0);
@@ -303,8 +308,9 @@ InitConv(MapID, NPCID, PlayerID) {
     
     // Debug GM information
     if(isgm(PlayerID)) {
-        shset(0, "[GM] Reset Pit Rank");
+        shset(0, "[GM] Reset Pit Rank Rewards");
         gsConvAddOption(5, 0);
+        
     }
     
     gsConvEnd(NPCID, MapID, PlayerID);
@@ -330,6 +336,7 @@ showRankRewardShop(MapID, NPCID, PlayerID) {
     
     new hasUnclaimedRewards = 0;
     for(new i = 1; i <= currentRank; i++) {
+        // Always check if this specific rank reward is NOT claimed
         new hasClaimedThisRank = (claimedRanks & (1 << (i-1))) != 0;
         
         if(!hasClaimedThisRank) {
@@ -357,8 +364,9 @@ showRankRewardShop(MapID, NPCID, PlayerID) {
     }
     
     if(!hasUnclaimedRewards) {
+        // This means ALL rewards for current rank are claimed
         shappends(1, "\nYou have claimed all available rewards for your current rank.");
-        shappends(1, "\nComplete more pit runs to reach the next rank!");
+        shappends(1, "\nComplete more pit runs or reset rewards to unclaim.");
     }
     
     gsConvSetMessage(1);
@@ -444,11 +452,6 @@ giveRankReward(PlayerID, rank) {
     gsStatusMessage(PlayerID, 0);
 }
 
-GetPermanentID(plrid) {
-    shset(0, "pid");
-    return gsGetFlag(plrid, 0);
-}
-
 public spawn(npcidtag, mapid, npcid) {
     shset(0, "gearcore");
     shset(1, "setnpc");
@@ -467,6 +470,7 @@ public converse(MapID, NPCID, PlayerID, MSGID) {
             // GM reset option
             if(isgm(PlayerID)) {
                 gmResetRankRewards(PlayerID);
+                showRankRewardShop(MapID, NPCID, PlayerID);
             }
         }
         default: {
@@ -490,15 +494,6 @@ isgm(sktid) {
     shset(0, "is_gm");
     return gsGetFlag(sktid, 0) == 1;
 }
-
-
-
-
-
-
-
-
-
 
 
 

@@ -1,6 +1,11 @@
 #include <stdlib.inc>
 #include <faldon.inc>
 
+// Define constants for run types
+#define RUN_TYPE_NORMAL 0
+#define RUN_TYPE_ADVANCED 1
+#define RUN_TYPE_EXPERT 2
+
 #define SCRIPTNAME "spy11"
 #define NPCTAG "spy_spy11_tag"
 #define MOBSCRIPT "spy12"
@@ -41,7 +46,7 @@
 #define KILLREQ 25
 #define MAX 255
 
-// Forward declarations
+// Forward declarations (only needed for functions called by other scripts)
 forward public converse(mapid, npcid, sktid, uidmsg);
 forward public countdown(secs);
 forward public timeout();
@@ -84,7 +89,7 @@ public zone_playerdeath(plrid, npcid, x, y, z, map) {
 }
 
 anyinarea() {
-    for(new i = 0; i < MAX; i++) {
+    for(new i = 1; i <= MAX; i++) {
         shset(0, "level");
         if(gsGetFlag(i, 0) > 0) {
             if(isinarea(i) == 1) {
@@ -231,6 +236,10 @@ public countdown(secs) {
         gsTimer(0, 1, 5, secs, 0, 0, 0, 0);
     }
     else {
+        // Get run type
+        shset(0, "spy_run_type");
+        new runType = gsGetFlag(0, 0);
+        
         // Reset kill counter and timer
         shset(0, KILLS);
         gsSetFlag(0, 0, 0);
@@ -249,7 +258,7 @@ public countdown(secs) {
         }
         
         startboosts();
-        spawnmobs();
+        spawnmobs(runType);
         timeout();
     }
 }
@@ -268,7 +277,7 @@ public timeout() {
         for(new i = 0; i < sizeof(members) && members[i] != -1; i++) {
             exitzone(members[i]);
             
-            shset(0, "Your team was too slow, a team needs to kill atleast one monster per minute.");
+            shset(0, "Your team was too slow, a team needs to kill at least one monster per minute.");
             gsStatusMessage(members[i], 0);
         }
     }
@@ -280,7 +289,7 @@ public timeout() {
             shset(0, SCRIPTNAME);
             shset(1, "timeout");
             
-            gsTimer(0, 1, 550, 0, 0, 0, 0, 0);  // Back to original tick rate
+            gsTimer(0, 1, 550, 0, 0, 0, 0, 0);  // Use original tick rate
         }
         else {
             shset(0, TIMEOUTRESET);
@@ -314,21 +323,21 @@ startboosts() {
     }
 }
 
-spawnmobs() {
+spawnmobs(runType) {
     shset(0, NPCTAG);
     new tag = gsGetFlag(0, 0);
     
-    // Get run type (advanced or normal)
+    // Store run type for spy12 to use when awarding points
     shset(0, "spy_run_type");
-    new runType = gsGetFlag(0, 0);  // 0=normal, 1=advanced, 2=expert
+    gsSetFlag(0, 0, runType);
     
     // Customize spawn message based on run type
     switch(runType) {
-        case 2: {
+        case RUN_TYPE_EXPERT: {
             shset(0, "Behold! The mighty Daijou and fearsome Serpents emerge from the shadows!");
             gsSayMessage(tag, 0);
         }
-        case 1: {
+        case RUN_TYPE_ADVANCED: {
             shset(0, "The Death Snakes slither forth as Bengal Tigers prowl into view!");
             gsSayMessage(tag, 0);
         }
@@ -371,10 +380,10 @@ spawnmobs() {
             // Spawn based on role and run type
             switch(playerRole) {
                 case ROLEMAGE: {
-                    if(runType == 2) {
+                    if(runType == RUN_TYPE_EXPERT) {
                         gsSummon(4, bx + xc * 5, by + yc * 5, DAIJOU, 0, 0, 0, 0);
                     }
-                    else if(runType == 1) {
+                    else if(runType == RUN_TYPE_ADVANCED) {
                         gsSummon(4, bx + xc * 5, by + yc * 5, SILVER_DRAGON, 0, 0, 0, 0);
                     }
                     else {
@@ -382,10 +391,10 @@ spawnmobs() {
                     }
                 }
                 case ROLEWAR: {
-                    if(runType == 2) {
+                    if(runType == RUN_TYPE_EXPERT) {
                         gsSummon(4, bx + xc * 5, by + yc * 5, SERPENT, 0, 0, 0, 0);
                     }
-                    else if(runType == 1) {
+                    else if(runType == RUN_TYPE_ADVANCED) {
                         gsSummon(4, bx + xc * 5, by + yc * 5, BENGAL_TIGER, 0, 0, 0, 0);
                     }
                     else {
@@ -393,12 +402,12 @@ spawnmobs() {
                     }
                 }
                 case ROLEARCHER: {
-                    if(runType == 2) {
+                    if(runType == RUN_TYPE_EXPERT) {
                         gsSummon(4, bx + xc * 5, by + yc * 5, 
                             gsRandom(0, 1) == 0 ? SERPENT : DAIJOU, 
                             0, 0, 0, 0);
                     }
-                    else if(runType == 1) {
+                    else if(runType == RUN_TYPE_ADVANCED) {
                         gsSummon(4, bx + xc * 5, by + yc * 5, 
                             gsRandom(0, 1) == 0 ? SILVER_DRAGON : BENGAL_TIGER, 
                             0, 0, 0, 0);
@@ -429,12 +438,12 @@ spawnmobs() {
             shset(0, "zone_playerdeath_script");
             gsSetSFlag(0, 0, 1);
             
-            if(runType == 2) {
+            if(runType == RUN_TYPE_EXPERT) {
                 gsSummon(4, bx + xc * 5, by + yc * 5, 
                     gsRandom(0, 1) == 0 ? DAIJOU : SERPENT, 
                     0, 0, 0, 0);
             }
-            else if(runType == 1) {
+            else if(runType == RUN_TYPE_ADVANCED) {
                 gsSummon(4, bx + xc * 5, by + yc * 5, 
                     gsRandom(0, 1) == 0 ? SILVER_DRAGON : BENGAL_TIGER, 
                     0, 0, 0, 0);
@@ -503,10 +512,10 @@ isinarea(sktid) {
 }
 
 getteammembers() {
-    new members[MAX - 1];
+    new members[MAX];
     new m = 0;
     
-    for(new i = 0; i < MAX; i++) {
+    for(new i = 1; i <= MAX; i++) {
         shset(0, "level");
         if(gsGetFlag(i, 0) > 0) {
             if(isinarea(i) == 1 && isactive(i) == 1) {
@@ -515,14 +524,14 @@ getteammembers() {
         }
     }
     
-    //Flag close element with -1
+    // Flag close element with -1
     members[m] = -1;
     
     return members;
 }
 
 scriptname(sktid) {
-    if(isgm(sktid) == 1) {
+    if(isgm(sktid)) {
         shset(0, "Script: ");
         shappends(0, SCRIPTNAME);
         gsStatusMessage(sktid, 0);
@@ -531,8 +540,7 @@ scriptname(sktid) {
 
 isgm(sktid) {
     shset(0, "is_gm");
-    if(gsGetFlag(sktid, 0) == 1) {
-        return 1;
-    }   
-    return 0;
+    return gsGetFlag(sktid, 0) == 1;
 }
+
+

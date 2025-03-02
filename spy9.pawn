@@ -14,6 +14,11 @@
 #define ROLEWAR 2
 #define ROLEARCHER 3
 
+// Define constants for run types
+#define RUN_TYPE_NORMAL 0
+#define RUN_TYPE_ADVANCED 1
+#define RUN_TYPE_EXPERT 2
+
 // Add Faldon day tracking for run resets
 #define QUESTDAY "#spy_team_day"
 #define DAYCOUNT "#spy_team_nr"
@@ -21,6 +26,7 @@
 #define EXPERT_RUNS_FLAG "spy_exp_runs_"
 #define TOTAL_RUNS "spy_runs_"
 
+// Map coordinates
 #define OX 209
 #define OY 228
 #define OM 5
@@ -141,7 +147,6 @@ getAvailableRuns(sktid, &remainingAdvanced, &remainingExpert) {
     remainingExpert = allowedExpert - usedExpert;
 }
 
-
 incrementRunCounter(sktid, isExpert) {
     new pid = GetPermanentID(sktid);
     
@@ -178,14 +183,11 @@ isactive(sktid) {
 
 isgm(sktid) {
     shset(0, "is_gm");
-    if(gsGetFlag(sktid, 0) == 1) {
-        return 1;
-    }   
-    return 0;
+    return gsGetFlag(sktid, 0) == 1;
 }
 
 scriptname(sktid) {
-    if(isgm(sktid) == 1) {
+    if(isgm(sktid)) {
         shset(0, "Script: ");
         shappends(0, SCRIPTNAME);
         gsStatusMessage(sktid, 0);
@@ -213,7 +215,7 @@ isincentralarea(sktid) {
 }
 
 anyleaderinarea() {
-    for(new i = 0; i < MAX; i++) {
+    for(new i = 1; i <= MAX; i++) {
         shset(0, "level");
         if(gsGetFlag(i, 0) > 0) {
             if(iswaiting(i) == 1) {
@@ -227,7 +229,7 @@ anyleaderinarea() {
 }
 
 anyincentralarea() {
-    for(new i = 0; i < MAX; i++) {
+    for(new i = 1; i <= MAX; i++) {
         if(isincentralarea(i) == 1) {
             return 1;
         }
@@ -239,7 +241,7 @@ getteammembers() {
     new members[MAX];
     new m = 0;
     
-    for(new i = 0; i < MAX; i++) {
+    for(new i = 1; i <= MAX; i++) {
         shset(0, "level");
         if(gsGetFlag(i, 0) > 0) {
             if(iswaiting(i) == 1 && isactive(i) == 1) {
@@ -281,7 +283,7 @@ warpout(sktid) {
 }
 
 removeinactive() {
-    for(new i = 0; i < MAX; i++) {
+    for(new i = 1; i <= MAX; i++) {
         shset(0, "level");
         if(gsGetFlag(i, 0) > 0) {
             if(iswaiting(i) == 1) {
@@ -293,7 +295,7 @@ removeinactive() {
     }
 }
 
-goin(runType = 0) {  // 0 = normal run, 1 = advanced run, 2 = expert run
+goin(runType) {
     killmobs();
     
     removeinactive(); // Warp players that are not part of team out.
@@ -336,9 +338,9 @@ goin(runType = 0) {  // 0 = normal run, 1 = advanced run, 2 = expert run
     // Add run type to message
     shappends(3, "\nStarting ");
     switch(runType) {
-        case 0: shappends(3, "Normal");
-        case 1: shappends(3, "Advanced");
-        case 2: shappends(3, "Expert");
+        case RUN_TYPE_NORMAL: shappends(3, "Normal");
+        case RUN_TYPE_ADVANCED: shappends(3, "Advanced");
+        case RUN_TYPE_EXPERT: shappends(3, "Expert");
     }
     shappends(3, " Run");
     
@@ -356,6 +358,15 @@ goin(runType = 0) {  // 0 = normal run, 1 = advanced run, 2 = expert run
 }
 
 giveoptions(mapid, npcid, sktid) {
+    // Check for pets
+    shset(0, "cur_pets");
+    if(gsGetFlag(sktid, 0) > 0) {
+        shset(0, "You cannot join with pets. Please store them in the Zoo first.");
+        gsStatusMessage(sktid, 0);
+        warpout(sktid);
+        return;
+    }
+    
     new lead = anyleaderinarea();
 
     shset(0, JOIN);
@@ -499,7 +510,7 @@ public converse(mapid, npcid, plrid, uidmsg) {
         case 1: { 
             if(isleader(plrid) == 1) {
                 if(anyincentralarea() == 0) {
-                    goin(0);  // Normal run
+                    goin(RUN_TYPE_NORMAL);
                 }
             }
         }
@@ -511,7 +522,7 @@ public converse(mapid, npcid, plrid, uidmsg) {
                     getAvailableRuns(plrid, remainingAdvanced, remainingExpert);
                     if(remainingAdvanced > 0 || isgm(plrid)) {
                         incrementRunCounter(plrid, false);  // false for advanced run
-                        goin(1);  // Advanced run
+                        goin(RUN_TYPE_ADVANCED);
                     }
                 }
             }
@@ -523,12 +534,10 @@ public converse(mapid, npcid, plrid, uidmsg) {
                     getAvailableRuns(plrid, remainingAdvanced, remainingExpert);
                     if(remainingExpert > 0 || isgm(plrid)) {
                         incrementRunCounter(plrid, true);  // true for expert run
-                        goin(2);  // Expert run
+                        goin(RUN_TYPE_EXPERT);
                     }
                 }
             }
         }
     }
 }
-
-

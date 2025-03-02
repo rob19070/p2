@@ -1,6 +1,7 @@
 #include <stdlib.inc>
 #include <faldon.inc>
 
+// Damage types
 #define DAMAGE_PHYSICAL 0
 #define DAMAGE_LIGHTNING 1
 #define DAMAGE_FIRE 2
@@ -8,6 +9,11 @@
 #define DAMAGE_POISON 4
 #define DAMAGE_HOLY 5
 #define DAMAGE_PARALYSIS 6
+
+// Run types
+#define RUN_TYPE_NORMAL 0
+#define RUN_TYPE_ADVANCED 1
+#define RUN_TYPE_EXPERT 2
 
 #define SCRIPTNAME "spy12"
 #define ITEMSCRIPT "pititem"
@@ -21,6 +27,7 @@
 #define TIMEOUTRESET "spy_team_to_r"
 #define POINTS_FLAG "spy_points_"
 #define TOTAL_RUNS "spy_runs_"
+#define RANK_FLAG "spy_rank_"
 
 #define ROLENONE 0
 #define ROLEMAGE 1
@@ -47,25 +54,67 @@
 
 #define KILLREQ 25
 #define MAX 255
+#define MAX_DAMAGE 10000  // Damage cap to prevent exploits
 
-// Forward declarations
+// Forward declarations (only for functions called by other scripts)
 forward public death(killerid, monsterid, x, y, z, map);
 forward public warpout(sktid);
 forward public attack(npcidtag, sktid, mapid, npcid, damageDone);
 forward public takedamage(npcidtag, mapid, npcid, sktid, damageTaken, immunity, damageClass);
-forward GetPermanentID(sktid);
-forward hasrole(sktid);
-forward isactive(sktid);
-forward isinarea(sktid);
-forward getrole(sktid);
-forward updateRank(sktid);
 
+// Helper functions
 GetPermanentID(sktid) {
     shset(0, "pid");
     return gsGetFlag(sktid, 0);
 }
 
+getRankFromRuns(runs) {
+    if(runs < 5) return 0;
+    else if(runs < 10) return 1;      // Squire Initiate
+    else if(runs < 20) return 2;      // Apprentice Fighter
+    else if(runs < 35) return 3;      // Footman
+    else if(runs < 60) return 4;      // Man-at-Arms
+    else if(runs < 90) return 5;      // Sergeant
+    else if(runs < 140) return 6;     // Knight Errant
+    else if(runs < 200) return 7;     // Knight Defender
+    else if(runs < 300) return 8;     // Veteran Knight
+    else if(runs < 450) return 9;     // Master-at-Arms
+    else if(runs < 650) return 10;    // Champion Knight
+    else if(runs < 950) return 11;    // Lord Defender
+    else if(runs < 1400) return 12;   // Noble Champion
+    else if(runs < 2000) return 13;   // Royal Protector
+    else if(runs < 3000) return 14;   // Grand Champion
+    else return 15;                   // Legendary Defender
+}
+
+getRankTitle(rank) {
+    switch(rank) {
+        case 1: shset(0, "Squire Initiate");
+        case 2: shset(0, "Apprentice Fighter");
+        case 3: shset(0, "Footman");
+        case 4: shset(0, "Man-at-Arms");
+        case 5: shset(0, "Sergeant");
+        case 6: shset(0, "Knight Errant");
+        case 7: shset(0, "Knight Defender");
+        case 8: shset(0, "Veteran Knight");
+        case 9: shset(0, "Master-at-Arms");
+        case 10: shset(0, "Champion Knight");
+        case 11: shset(0, "Lord Defender");
+        case 12: shset(0, "Noble Champion");
+        case 13: shset(0, "Royal Protector");
+        case 14: shset(0, "Grand Champion");
+        case 15: shset(0, "Legendary Defender");
+        default: shset(0, "Unknown");
+    }
+}
+
 public death(killerid, monsterid, x, y, z, map) {
+    // Verify killer is still online
+    shset(0, "level");
+    if(gsGetFlag(killerid, 0) <= 0) {
+        return; // Killer is no longer online
+    }
+    
     shset(0, KILLS);
     new k = gsGetFlag(0, 0);
     
@@ -88,16 +137,40 @@ public death(killerid, monsterid, x, y, z, map) {
         
         shset(0, "spy_run_type");
         new runType = gsGetFlag(0, 0);
-        new pointsToAward = (runType == 2) ? 3 : (runType == 1) ? 2 : 1;
+        new pointsToAward = (runType == RUN_TYPE_EXPERT) ? 3 : (runType == RUN_TYPE_ADVANCED) ? 2 : 1;
+        
+        // Log run completion
+        shset(0, "Team completed a ");
+        switch(runType) {
+            case RUN_TYPE_EXPERT: shappends(0, "Expert");
+            case RUN_TYPE_ADVANCED: shappends(0, "Advanced");
+            default: shappends(0, "Normal");
+        }
+        shappends(0, " run. Awarding ");
+        shappendn(0, pointsToAward);
+        shappends(0, " points to survivors.");
+        gsSayMessage(killerid, 0);
         
         for(new i = 0; i < sizeof(members) && members[i] != -1; i++) {
+            // Verify player is still online
+            shset(0, "level");
+            if(gsGetFlag(members[i], 0) <= 0) {
+                continue; // Skip offline players
+            }
+            
+            // Verify player is still in area
+            if(!isinarea(members[i])) {
+                continue; // Skip players who left area
+            }
+            
             new hpcur, hpmax, mpcur, mpmax;
             gsGetHPMPInfo(members[i], hpcur, hpmax, mpcur, mpmax);
             
             if(hpcur > 0) {
+                // Get player's permanent ID
                 new pid = GetPermanentID(members[i]);
                 
-                // Increment total runs
+                // Reward only to living players
                 shset(0, TOTAL_RUNS);
                 shappendn(0, pid);
                 new currentRuns = gsGetFlag(0, 0);
@@ -127,7 +200,7 @@ public death(killerid, monsterid, x, y, z, map) {
                 shset(0, REWARD);
                 gsSetFlag(members[i], 0, 1);
                 
-                // Get total runs for message
+                // Get updated total runs for message
                 shset(0, TOTAL_RUNS);
                 shappendn(0, pid);
                 new totalRuns = gsGetFlag(0, 0);
@@ -157,6 +230,13 @@ public death(killerid, monsterid, x, y, z, map) {
 }
 
 updateRank(sktid) {
+    // Verify player is still online
+    shset(0, "level");
+    if(gsGetFlag(sktid, 0) <= 0) {
+        return; // Player is no longer online
+    }
+    
+    // Get permanent ID
     new pid = GetPermanentID(sktid);
     
     // Get current runs total
@@ -164,13 +244,6 @@ updateRank(sktid) {
     shappendn(0, pid);
     new currentRuns = gsGetFlag(0, 0);
     
-    // Store name for leaderboard
-    shset(0, "name");
-    gsGetSFlag(sktid, 0, 1);
-    shset(0, "pnm");
-    shappendn(0, pid);
-    gsSetSFlag(0, 0, 1);
-
     // Check ranks and set title in slot 3 if milestone reached
     if(currentRuns == 5) shset(3, "Squire Initiate");
     else if(currentRuns == 10) shset(3, "Apprentice Fighter");
@@ -200,9 +273,21 @@ updateRank(sktid) {
     shappends(0, "!");
     
     gsSayMessage(sktid, 0);
+    
+    // Update rank flag for other scripts to use
+    shset(0, RANK_FLAG);
+    shappendn(0, pid);
+    new rank = getRankFromRuns(currentRuns);
+    gsSetFlag(0, 0, rank);
 }
 
 public warpout(sktid) {
+    // Verify player is still online
+    shset(0, "level");
+    if(gsGetFlag(sktid, 0) <= 0) {
+        return; // Player is no longer online
+    }
+    
     if(isinarea(sktid) == 1) {
         shset(0, JOIN);
         gsSetFlag(sktid, 0, 0);
@@ -216,46 +301,65 @@ public warpout(sktid) {
 }
 
 public takedamage(npcidtag, mapid, npcid, sktid, damageTaken, immunity, damageClass) {
-    // Get role and check weapon restrictions
-    new role = getrole(sktid);
+    // Validate player is still online
+    shset(0, "level");
+    if(gsGetFlag(sktid, 0) <= 0) {
+        // Player is not online, set damage to 0
+        shset(0, "this_takedamage_damage");
+        gsSetFlag(0, 0, 0);
+        return;
+    }
+    
+    // Prevent excessive damage values
+    if(damageTaken <= 0) {
+        shset(0, "this_takedamage_damage");
+        gsSetFlag(0, 0, 0);
+        return;
+    }
+    
+    if(damageTaken > MAX_DAMAGE) {
+        damageTaken = MAX_DAMAGE; // Cap damage at reasonable maximum
+    }
     
     // Apply set bonuses first
     shset(6, ITEMSCRIPT);
     shset(7, "ModifyIncomingDamage");
     damageTaken = gsCall(6, 7, sktid, damageTaken, damageClass);
     
-    // Apply role & monster specific modifiers
+    // Get role and monster type
+    new role = getrole(sktid);
     shset(0, "monster_number");
-    new mobid = gsGetFlag(npcidtag, 0)
+    new mobid = gsGetFlag(npcidtag, 0);
     
+    // Apply role & monster specific modifiers
     switch(mobid) {
         case BENGAL_TIGER: {
             switch(role) {
                 case ROLEMAGE: {
                     shset(0, "this_takedamage_damage");
                     switch(damageClass) {
-                        case 6: gsSetFlag(0, 0, damageTaken / 2);   // 50%
-                        case 3: gsSetFlag(0, 0, damageTaken / 3);   // 33%
-                        case 2: gsSetFlag(0, 0, damageTaken / 4);   // 25%
-                        case 0: gsSetFlag(0, 0, damageTaken / 10);  // 10%
+                        case 6: gsSetFlag(0, 0, damageTaken / 2);   // 50% damage
+                        case 3: gsSetFlag(0, 0, damageTaken / 3);   // 33% damage
+                        case 2: gsSetFlag(0, 0, damageTaken / 4);   // 25% damage
+                        case 0: gsSetFlag(0, 0, damageTaken / 10);  // 10% damage
                     }
                 }
                 case ROLEWAR: {
                     shset(0, "this_takedamage_damage");
                     switch(damageClass) {
-                        case 6: gsSetFlag(0, 0, damageTaken / 3);         // 33%
-                        case 3: gsSetFlag(0, 0, damageTaken);             // 100%
-                        case 2: gsSetFlag(0, 0, (damageTaken * 12) / 10); // 150%
-                        case 0: gsSetFlag(0, 0, (damageTaken * 15) / 10); // 250%
+                        case 6: gsSetFlag(0, 0, damageTaken / 3);         // 33% damage
+                        case 3: gsSetFlag(0, 0, damageTaken);             // 100% damage
+                        case 2: gsSetFlag(0, 0, (damageTaken * 12) / 10); // 120% damage
+                        case 0: gsSetFlag(0, 0, (damageTaken * 15) / 10); // 150% damage
                     }
                 }
                 case ROLEARCHER: {
                     shset(0, "this_takedamage_damage");
                     switch(damageClass) {
-                        case 6: gsSetFlag(0, 0, (damageTaken * 415) / 1000);  // 41.5%
-                        case 3: gsSetFlag(0, 0, (damageTaken * 475) / 100);   // 475% (bow damage)
-                        case 2: gsSetFlag(0, 0, (damageTaken * 875) / 1000);  // 87.5%
-                        case 0: gsSetFlag(0, 0, (damageTaken * 130) / 100);   // 130%
+                        case 6: gsSetFlag(0, 0, (damageTaken * 415) / 1000);  // 41.5% damage
+                        case 3: gsSetFlag(0, 0, (damageTaken * 475) / 100);   // 475% damage (bow damage)
+                        case 2: gsSetFlag(0, 0, (damageTaken * 875) / 1000);  // 87.5% damage
+                        case 0: gsSetFlag(0, 0, (damageTaken * 130) / 100);   // 130% damage
                     }
                 }
                 default: {
@@ -269,28 +373,28 @@ public takedamage(npcidtag, mapid, npcid, sktid, damageTaken, immunity, damageCl
                 case ROLEMAGE: {
                     shset(0, "this_takedamage_damage");
                     switch(damageClass) {
-                        case 6: gsSetFlag(0, 0, damageTaken * 2);
-                        case 3: gsSetFlag(0, 0, damageTaken * 4);
-                        case 2: gsSetFlag(0, 0, damageTaken * 6);
-                        case 0: gsSetFlag(0, 0, damageTaken / 3);
+                        case 6: gsSetFlag(0, 0, damageTaken * 2);    // 200% damage
+                        case 3: gsSetFlag(0, 0, damageTaken * 4);    // 400% damage
+                        case 2: gsSetFlag(0, 0, damageTaken * 6);    // 600% damage
+                        case 0: gsSetFlag(0, 0, damageTaken / 3);    // 33% damage
                     }
                 }
                 case ROLEWAR: {
                     shset(0, "this_takedamage_damage");
                     switch(damageClass) {
-                        case 6: gsSetFlag(0, 0, damageTaken / 3);
-                        case 3: gsSetFlag(0, 0, damageTaken / 3);
-                        case 2: gsSetFlag(0, 0, damageTaken / 3);
-                        case 0: gsSetFlag(0, 0, damageTaken / 15);
+                        case 6: gsSetFlag(0, 0, damageTaken / 3);    // 33% damage
+                        case 3: gsSetFlag(0, 0, damageTaken / 3);    // 33% damage
+                        case 2: gsSetFlag(0, 0, damageTaken / 3);    // 33% damage
+                        case 0: gsSetFlag(0, 0, damageTaken / 15);   // 6.7% damage
                     }   
                 }
                 case ROLEARCHER: {
                     shset(0, "this_takedamage_damage");
                     switch(damageClass) {
-                        case 6: gsSetFlag(0, 0, (damageTaken * 415) / 1000);  // 41.5%
-                        case 3: gsSetFlag(0, 0, (damageTaken * 475) / 100);   // 475%
-                        case 2: gsSetFlag(0, 0, (damageTaken * 875) / 1000);  // 87.5%
-                        case 0: gsSetFlag(0, 0, (damageTaken * 130) / 100);   // 130%
+                        case 6: gsSetFlag(0, 0, (damageTaken * 415) / 1000);  // 41.5% damage
+                        case 3: gsSetFlag(0, 0, (damageTaken * 475) / 100);   // 475% damage
+                        case 2: gsSetFlag(0, 0, (damageTaken * 875) / 1000);  // 87.5% damage
+                        case 0: gsSetFlag(0, 0, (damageTaken * 130) / 100);   // 130% damage
                     }
                 }
                 default: {
@@ -304,28 +408,28 @@ public takedamage(npcidtag, mapid, npcid, sktid, damageTaken, immunity, damageCl
                 case ROLEMAGE: {
                     shset(0, "this_takedamage_damage");
                     switch(damageClass) {
-                        case 6: gsSetFlag(0, 0, damageTaken / 2);
-                        case 3: gsSetFlag(0, 0, damageTaken / 3);
-                        case 2: gsSetFlag(0, 0, damageTaken / 4);
-                        case 0: gsSetFlag(0, 0, damageTaken / 10);
+                        case 6: gsSetFlag(0, 0, damageTaken / 2);    // 50% damage
+                        case 3: gsSetFlag(0, 0, damageTaken / 3);    // 33% damage
+                        case 2: gsSetFlag(0, 0, damageTaken / 4);    // 25% damage
+                        case 0: gsSetFlag(0, 0, damageTaken / 10);   // 10% damage
                     }
                 }
                 case ROLEWAR: {
                     shset(0, "this_takedamage_damage");
                     switch(damageClass) {
-                        case 6: gsSetFlag(0, 0, damageTaken / 3);
-                        case 3: gsSetFlag(0, 0, damageTaken * 1);
-                        case 2: gsSetFlag(0, 0, (damageTaken * 15) / 10);
-                        case 0: gsSetFlag(0, 0, (damageTaken * 25) / 10);
+                        case 6: gsSetFlag(0, 0, damageTaken / 3);          // 33% damage
+                        case 3: gsSetFlag(0, 0, damageTaken * 1);          // 100% damage
+                        case 2: gsSetFlag(0, 0, (damageTaken * 15) / 10);  // 150% damage
+                        case 0: gsSetFlag(0, 0, (damageTaken * 25) / 10);  // 250% damage
                     }   
                 }
                 case ROLEARCHER: {
                     shset(0, "this_takedamage_damage");
                     switch(damageClass) {
-                        case 6: gsSetFlag(0, 0, (damageTaken * 415) / 100);  // 41.5%
-                        case 3: gsSetFlag(0, 0, (damageTaken * 475) / 100);   // 425% (bow damage)
-                        case 2: gsSetFlag(0, 0, (damageTaken * 875) / 100);  // 87.5%
-                        case 0: gsSetFlag(0, 0, (damageTaken * 130) / 100);   // 130%
+                        case 6: gsSetFlag(0, 0, (damageTaken * 415) / 100);   // 415% damage
+                        case 3: gsSetFlag(0, 0, (damageTaken * 475) / 100);   // 475% damage (bow damage)
+                        case 2: gsSetFlag(0, 0, (damageTaken * 875) / 100);   // 875% damage
+                        case 0: gsSetFlag(0, 0, (damageTaken * 130) / 100);   // 130% damage
                     }
                 }
                 default: {
@@ -339,28 +443,28 @@ public takedamage(npcidtag, mapid, npcid, sktid, damageTaken, immunity, damageCl
                 case ROLEMAGE: {
                     shset(0, "this_takedamage_damage");
                     switch(damageClass) {
-                        case 6: gsSetFlag(0, 0, damageTaken * 9);
-                        case 3: gsSetFlag(0, 0, damageTaken * 3);
-                        case 2: gsSetFlag(0, 0, damageTaken * 2);
-                        case 0: gsSetFlag(0, 0, damageTaken / 3);
+                        case 6: gsSetFlag(0, 0, damageTaken * 9);    // 900% damage
+                        case 3: gsSetFlag(0, 0, damageTaken * 3);    // 300% damage
+                        case 2: gsSetFlag(0, 0, damageTaken * 2);    // 200% damage
+                        case 0: gsSetFlag(0, 0, damageTaken / 3);    // 33% damage
                     }
                 }
                 case ROLEWAR: {
                     shset(0, "this_takedamage_damage");
                     switch(damageClass) {
-                        case 6: gsSetFlag(0, 0, damageTaken / 3);
-                        case 3: gsSetFlag(0, 0, damageTaken / 3);
-                        case 2: gsSetFlag(0, 0, damageTaken / 3);
-                        case 0: gsSetFlag(0, 0, damageTaken / 15);
+                        case 6: gsSetFlag(0, 0, damageTaken / 3);    // 33% damage
+                        case 3: gsSetFlag(0, 0, damageTaken / 3);    // 33% damage
+                        case 2: gsSetFlag(0, 0, damageTaken / 3);    // 33% damage
+                        case 0: gsSetFlag(0, 0, damageTaken / 15);   // 6.7% damage
                     }   
                 }
                 case ROLEARCHER: {
                     shset(0, "this_takedamage_damage");
                     switch(damageClass) {
-                        case 6: gsSetFlag(0, 0, (damageTaken * 415) / 1000);  // 41.5%
-                        case 3: gsSetFlag(0, 0, (damageTaken * 425) / 100);   // 425% (bow damage)
-                        case 2: gsSetFlag(0, 0, (damageTaken * 875) / 1000);  // 87.5%
-                        case 0: gsSetFlag(0, 0, (damageTaken * 130) / 100);   // 130%
+                        case 6: gsSetFlag(0, 0, (damageTaken * 415) / 1000);  // 41.5% damage
+                        case 3: gsSetFlag(0, 0, (damageTaken * 425) / 100);   // 425% damage (bow damage)
+                        case 2: gsSetFlag(0, 0, (damageTaken * 875) / 1000);  // 87.5% damage
+                        case 0: gsSetFlag(0, 0, (damageTaken * 130) / 100);   // 130% damage
                     }
                 }
                 default: {
@@ -374,28 +478,28 @@ public takedamage(npcidtag, mapid, npcid, sktid, damageTaken, immunity, damageCl
                 case ROLEMAGE: {
                     shset(0, "this_takedamage_damage");
                     switch(damageClass) {
-                        case 6: gsSetFlag(0, 0, damageTaken * 6);
-                        case 3: gsSetFlag(0, 0, damageTaken * 5);
-                        case 2: gsSetFlag(0, 0, damageTaken * 5);
-                        case 0: gsSetFlag(0, 0, damageTaken / 4);
+                        case 6: gsSetFlag(0, 0, damageTaken * 6);    // 600% damage
+                        case 3: gsSetFlag(0, 0, damageTaken * 5);    // 500% damage
+                        case 2: gsSetFlag(0, 0, damageTaken * 5);    // 500% damage
+                        case 0: gsSetFlag(0, 0, damageTaken / 4);    // 25% damage
                     }
                 }
                 case ROLEWAR: {
                     shset(0, "this_takedamage_damage");
                     switch(damageClass) {
-                        case 6: gsSetFlag(0, 0, damageTaken / 2);
-                        case 3: gsSetFlag(0, 0, damageTaken / 2);
-                        case 2: gsSetFlag(0, 0, damageTaken / 2);
-                        case 0: gsSetFlag(0, 0, damageTaken / 20);
+                        case 6: gsSetFlag(0, 0, damageTaken / 2);    // 50% damage
+                        case 3: gsSetFlag(0, 0, damageTaken / 2);    // 50% damage
+                        case 2: gsSetFlag(0, 0, damageTaken / 2);    // 50% damage
+                        case 0: gsSetFlag(0, 0, damageTaken / 20);   // 5% damage
                     }   
                 }
                 case ROLEARCHER: {
                     shset(0, "this_takedamage_damage");
                     switch(damageClass) {
-                        case 6: gsSetFlag(0, 0, (damageTaken * 415) / 1000);  // 41.5%
-                        case 3: gsSetFlag(0, 0, (damageTaken * 275) / 100);   // 275% (extra bow damage)
-                        case 2: gsSetFlag(0, 0, (damageTaken * 875) / 1000);  // 87.5%
-                        case 0: gsSetFlag(0, 0, (damageTaken * 130) / 100);   // 130%
+                        case 6: gsSetFlag(0, 0, (damageTaken * 415) / 1000);  // 41.5% damage
+                        case 3: gsSetFlag(0, 0, (damageTaken * 275) / 100);   // 275% damage (extra bow damage)
+                        case 2: gsSetFlag(0, 0, (damageTaken * 875) / 1000);  // 87.5% damage
+                        case 0: gsSetFlag(0, 0, (damageTaken * 130) / 100);   // 130% damage
                     }
                 }
                 default: {
@@ -409,28 +513,28 @@ public takedamage(npcidtag, mapid, npcid, sktid, damageTaken, immunity, damageCl
                 case ROLEMAGE: {
                     shset(0, "this_takedamage_damage");
                     switch(damageClass) {
-                        case 6: gsSetFlag(0, 0, damageTaken / 1);
-                        case 3: gsSetFlag(0, 0, damageTaken / 2);
-                        case 2: gsSetFlag(0, 0, damageTaken / 3);
-                        case 0: gsSetFlag(0, 0, damageTaken / 8);
+                        case 6: gsSetFlag(0, 0, damageTaken / 1);    // 100% damage
+                        case 3: gsSetFlag(0, 0, damageTaken / 2);    // 50% damage
+                        case 2: gsSetFlag(0, 0, damageTaken / 3);    // 33% damage
+                        case 0: gsSetFlag(0, 0, damageTaken / 8);    // 12.5% damage
                     }
                 }
                 case ROLEWAR: {
                     shset(0, "this_takedamage_damage");
                     switch(damageClass) {
-                        case 6: gsSetFlag(0, 0, damageTaken / 2);
-                        case 3: gsSetFlag(0, 0, damageTaken * 1);
-                        case 2: gsSetFlag(0, 0, (damageTaken * 20) / 10);
-                        case 0: gsSetFlag(0, 0, (damageTaken * 30) / 10);
+                        case 6: gsSetFlag(0, 0, damageTaken / 2);          // 50% damage
+                        case 3: gsSetFlag(0, 0, damageTaken * 1);          // 100% damage
+                        case 2: gsSetFlag(0, 0, (damageTaken * 20) / 10);  // 200% damage
+                        case 0: gsSetFlag(0, 0, (damageTaken * 30) / 10);  // 300% damage
                     }   
                 }
                 case ROLEARCHER: {
                     shset(0, "this_takedamage_damage");
                     switch(damageClass) {
-                        case 6: gsSetFlag(0, 0, (damageTaken * 415) / 1000);  // 41.5%
-                        case 3: gsSetFlag(0, 0, (damageTaken * 475) / 100);   // 475% (extra bow damage)
-                        case 2: gsSetFlag(0, 0, (damageTaken * 875) / 1000);  // 87.5%
-                        case 0: gsSetFlag(0, 0, (damageTaken * 130) / 100);   // 130%
+                        case 6: gsSetFlag(0, 0, (damageTaken * 415) / 1000);  // 41.5% damage
+                        case 3: gsSetFlag(0, 0, (damageTaken * 475) / 100);   // 475% damage (extra bow damage)
+                        case 2: gsSetFlag(0, 0, (damageTaken * 875) / 1000);  // 87.5% damage
+                        case 0: gsSetFlag(0, 0, (damageTaken * 130) / 100);   // 130% damage
                     }
                 }
                 default: {
@@ -439,10 +543,35 @@ public takedamage(npcidtag, mapid, npcid, sktid, damageTaken, immunity, damageCl
                 }
             }
         }
+        default: {
+            // Unknown monster type, use default damage
+            shset(0, "this_takedamage_damage");
+            gsSetFlag(0, 0, damageTaken);
+        }
     }
 }
 
 public attack(npcidtag, sktid, mapid, npcid, damageDone) {
+    // Validate player is still online
+    shset(0, "level");
+    if(gsGetFlag(sktid, 0) <= 0) {
+        // Player is not online, set damage to 0
+        shset(0, "this_attack_damage");
+        gsSetFlag(0, 0, 0);
+        return;
+    }
+    
+    // Prevent excessive damage values
+    if(damageDone <= 0) {
+        shset(0, "this_attack_damage");
+        gsSetFlag(0, 0, 0);
+        return;
+    }
+    
+    if(damageDone > MAX_DAMAGE) {
+        damageDone = MAX_DAMAGE; // Cap damage at reasonable maximum
+    }
+    
     // Get set bonuses first
     shset(6, ITEMSCRIPT);
     shset(7, "ModifyOutgoingDamage");
@@ -458,19 +587,19 @@ public attack(npcidtag, sktid, mapid, npcid, damageDone) {
             switch(getrole(sktid)) {
                 case ROLEMAGE: {
                     shset(0, "this_attack_damage");
-                    gsSetFlag(0, 0, damageDone * 3);
+                    gsSetFlag(0, 0, damageDone * 3);  // 300% damage
                 }
                 case ROLEWAR: {
                     shset(0, "this_attack_damage");
-                    gsSetFlag(0, 0, damageDone / 2);   
+                    gsSetFlag(0, 0, damageDone / 2);  // 50% damage
                 }
                 case ROLEARCHER: {
                     shset(0, "this_attack_damage");
-                    gsSetFlag(0, 0, damageDone * 2);
+                    gsSetFlag(0, 0, damageDone * 2);  // 200% damage
                 }
                 default: {
                     shset(0, "this_attack_damage");
-                    gsSetFlag(0, 0, damageDone * 1);
+                    gsSetFlag(0, 0, damageDone * 1);  // 100% damage
                 }
             }
         }
@@ -478,19 +607,19 @@ public attack(npcidtag, sktid, mapid, npcid, damageDone) {
             switch(getrole(sktid)) {
                 case ROLEMAGE: {
                     shset(0, "this_attack_damage");
-                    gsSetFlag(0, 0, damageDone / 3);
+                    gsSetFlag(0, 0, damageDone / 3);  // 33% damage
                 }
                 case ROLEWAR: {
                     shset(0, "this_attack_damage");
-                    gsSetFlag(0, 0, damageDone * 4);   
+                    gsSetFlag(0, 0, damageDone * 4);  // 400% damage
                 }
                 case ROLEARCHER: {
                     shset(0, "this_attack_damage");
-                    gsSetFlag(0, 0, damageDone * 2);
+                    gsSetFlag(0, 0, damageDone * 2);  // 200% damage
                 }
                 default: {
                     shset(0, "this_attack_damage");
-                    gsSetFlag(0, 0, damageDone * 8);
+                    gsSetFlag(0, 0, damageDone * 8);  // 800% damage
                 }
             }
         }
@@ -498,19 +627,19 @@ public attack(npcidtag, sktid, mapid, npcid, damageDone) {
             switch(getrole(sktid)) {
                 case ROLEMAGE: {
                     shset(0, "this_attack_damage");
-                    gsSetFlag(0, 0, damageDone * 3);
+                    gsSetFlag(0, 0, damageDone * 3);  // 300% damage
                 }
                 case ROLEWAR: {
                     shset(0, "this_attack_damage");
-                    gsSetFlag(0, 0, damageDone / 2);   
+                    gsSetFlag(0, 0, damageDone / 2);  // 50% damage
                 }
                 case ROLEARCHER: {
                     shset(0, "this_attack_damage");
-                    gsSetFlag(0, 0, damageDone * 1);
+                    gsSetFlag(0, 0, damageDone * 1);  // 100% damage
                 }
                 default: {
                     shset(0, "this_attack_damage");
-                    gsSetFlag(0, 0, damageDone * 8);
+                    gsSetFlag(0, 0, damageDone * 8);  // 800% damage
                 }
             }
         }
@@ -518,19 +647,19 @@ public attack(npcidtag, sktid, mapid, npcid, damageDone) {
             switch(getrole(sktid)) {
                 case ROLEMAGE: {
                     shset(0, "this_attack_damage");
-                    gsSetFlag(0, 0, damageDone / 3);
+                    gsSetFlag(0, 0, damageDone / 3);  // 33% damage
                 }
                 case ROLEWAR: {
                     shset(0, "this_attack_damage");
-                    gsSetFlag(0, 0, damageDone * 4);   
+                    gsSetFlag(0, 0, damageDone * 4);  // 400% damage
                 }
                 case ROLEARCHER: {
                     shset(0, "this_attack_damage");
-                    gsSetFlag(0, 0, damageDone * 1);
+                    gsSetFlag(0, 0, damageDone * 1);  // 100% damage
                 }
                 default: {
                     shset(0, "this_attack_damage");
-                    gsSetFlag(0, 0, damageDone * 8);
+                    gsSetFlag(0, 0, damageDone * 8);  // 800% damage
                 }
             }
         }
@@ -538,19 +667,19 @@ public attack(npcidtag, sktid, mapid, npcid, damageDone) {
             switch(getrole(sktid)) {
                 case ROLEMAGE: {
                     shset(0, "this_attack_damage");
-                    gsSetFlag(0, 0, damageDone / 4);
+                    gsSetFlag(0, 0, damageDone / 4);  // 25% damage
                 }
                 case ROLEWAR: {
                     shset(0, "this_attack_damage");
-                    gsSetFlag(0, 0, damageDone * 5);   
+                    gsSetFlag(0, 0, damageDone * 5);  // 500% damage
                 }
                 case ROLEARCHER: {
                     shset(0, "this_attack_damage");
-                    gsSetFlag(0, 0, damageDone * 2);
+                    gsSetFlag(0, 0, damageDone * 2);  // 200% damage
                 }
                 default: {
                     shset(0, "this_attack_damage");
-                    gsSetFlag(0, 0, damageDone * 10);
+                    gsSetFlag(0, 0, damageDone * 10); // 1000% damage
                 }
             }
         }
@@ -558,21 +687,26 @@ public attack(npcidtag, sktid, mapid, npcid, damageDone) {
             switch(getrole(sktid)) {
                 case ROLEMAGE: {
                     shset(0, "this_attack_damage");
-                    gsSetFlag(0, 0, damageDone * 4);
+                    gsSetFlag(0, 0, damageDone * 4);  // 400% damage
                 }
                 case ROLEWAR: {
                     shset(0, "this_attack_damage");
-                    gsSetFlag(0, 0, damageDone / 1);   
+                    gsSetFlag(0, 0, damageDone / 1);  // 100% damage
                 }
                 case ROLEARCHER: {
                     shset(0, "this_attack_damage");
-                    gsSetFlag(0, 0, damageDone * 2);
+                    gsSetFlag(0, 0, damageDone * 2);  // 200% damage
                 }
                 default: {
                     shset(0, "this_attack_damage");
-                    gsSetFlag(0, 0, damageDone * 10);
+                    gsSetFlag(0, 0, damageDone * 10); // 1000% damage
                 }
             }
+        }
+        default: {
+            // Unknown monster type, use default damage
+            shset(0, "this_attack_damage");
+            gsSetFlag(0, 0, damageDone);
         }
     }
 }
@@ -601,7 +735,7 @@ getteammembers() {
     new members[MAX];
     new m = 0;
     
-    for(new i = 0; i < MAX; i++) {
+    for(new i = 1; i <= MAX; i++) {
         shset(0, "level");
         if(gsGetFlag(i, 0) > 0) {
             if(isinarea(i) == 1 && isactive(i) == 1 && hasrole(i)) {
