@@ -27,7 +27,6 @@
 #define DY 160
 
 forward public converse(mapid, npcid, sktid, uidmsg);
-forward public exec(mapid, x, y, z, gmlvl, sktid);
 
 GetPermanentID(sktid) {
     shset(0, "pid");
@@ -131,6 +130,141 @@ getRankName(outputSlot, runs) {
     }
 }
 
+joinoptions(mapid, npcid, sktid) {
+    gsConvBegin();
+    
+    if(anyinarea() == 0) {
+        shset(0, "level");
+        if(gsGetFlag(sktid, 0) >= 150 || ism(sktid) == 1) {
+            shset(0, DAYRESTRICT);
+            new dr = gsGetFlag(0, 0);
+            
+            if(daycheck(sktid, 0) == 1 || dr == 0) {
+                // Added check for pets
+                shset(0, "cur_pets");
+                if(gsGetFlag(sktid, 0) == 0) {
+                    shset(0, "What kind of role do you wish to have?");
+                    gsConvSetMessage(0);
+                    
+                    shset(0, "Mage");
+                    gsConvAddOption(2, 0);
+                
+                    shset(0, "Warrior");
+                    gsConvAddOption(3, 0);
+                
+                    shset(0, "Archer");
+                    gsConvAddOption(4, 0);
+                    
+                    shset(0, "Nevermind");
+                    gsConvAddOption(6, 0);
+                }
+                else {
+                    shset(0, "You're not allowed to take pets, please put your pets in the Zoo and come back.");
+                    gsConvSetMessage(0);
+                
+                    shset(0, "Okay!");
+                    gsConvAddOption(6, 0);
+                }
+            }
+            else {
+                shset(0, "You have already tried the kill pit ");
+                shappendn(0, MAXTRIES);
+                shappends(0, " times on that account this Faldon day, please come back tomorrow!");
+                gsConvSetMessage(0);
+            
+                shset(0, "Okay!");
+                gsConvAddOption(6, 0);
+            }
+        }
+        else {
+            shset(0, "You need to be atleast level 150 to join.");
+            gsConvSetMessage(0);
+            
+            shset(0, "Okay!");
+            gsConvAddOption(6, 0);
+        }
+    }
+    else {
+        shset(0, "Not at the moment, another team is still busy down there. Come back in a bit.");
+        gsConvSetMessage(0);
+        
+        shset(0, "Okay!");
+        gsConvAddOption(6, 0);
+    }
+    
+    gsConvEnd(npcid, mapid, sktid);
+}
+
+explain(mapid, npcid, sktid) {
+    gsConvBegin();
+    shset(0, "This is the kill pit, we summon monsters in a zone for you and your team to kill. If you kill the monsters and live you will get a reward.");
+    gsConvSetMessage(0);
+    
+    shset(0, "I understand.");
+    gsConvAddOption(6, 0);
+
+    gsConvEnd(npcid, mapid, sktid);
+}
+
+playerjoin(sktid, role) {
+    shset(0, DAYRESTRICT);
+    new dr = gsGetFlag(0, 0);
+
+    if((daycheck(sktid, 1) == 1 || dr == 0) && anyinarea() == 0) {
+        // Check for pets again before joining
+        shset(0, "cur_pets");
+        if(gsGetFlag(sktid, 0) != 0) {
+            shset(0, "You cannot join with pets.");
+            gsStatusMessage(sktid, 0);
+            return;
+        }
+        
+        shset(0, JOIN);
+        gsSetFlag(sktid, 0, role);
+        
+        shset(0, LEADER);
+        gsSetFlag(sktid, 0, 0);
+        
+        shset(0, ACTIVE);
+        gsSetFlag(sktid, 0, 0);
+        
+        shset(0, "faldon_day");
+        shset(1, QUESTDAY);
+        gsSetFlag(sktid, 1, gsGetFlag(0, 0));
+    
+        gsSetCoords(sktid, MX, MY, 0, MAP);
+        
+        shset(0, "To join the team talk to Larry, the first to talk to him will be assigned the Team Leader role. The Team Leader decides when the team goes in.");
+        gsTutorialBegin();
+        gsTutorialAdd(0);
+        gsTutorialEnd(sktid);
+    }
+}
+
+anyinarea() {
+    for(new i = 1; i <= MAX; i++) {
+        shset(0, "level");
+        if(gsGetFlag(i, 0) > 0) {
+            if(isinarea(i) == 1) {
+                return 1;
+            }
+        }
+    }
+    return 0;
+}
+
+isinarea(sktid) {
+    new x,y,z,m;
+    gsGetCoords(sktid, x, y, z, m);
+
+    if(m == TM && x >= TX && x <= DX && y >= TY && y <= DY) {
+        return 1;
+    }
+    else {
+        return 0;
+    }
+}
+
 giveoptions(mapid, npcid, sktid) {
     shset(0, ENABLED);
     new e = gsGetFlag(0, 0);
@@ -207,137 +341,6 @@ giveoptions(mapid, npcid, sktid) {
     }
     
     gsConvEnd(npcid, mapid, sktid);
-}
-
-joinoptions(mapid, npcid, sktid) {
-    gsConvBegin();
-    
-    if(anyinarea() == 0) {
-        shset(0, "level");
-        if(gsGetFlag(sktid, 0) >= 150 || ism(sktid) == 1) {
-            shset(0, DAYRESTRICT);
-            new dr = gsGetFlag(0, 0);
-            
-            if(daycheck(sktid, 0) == 1 || dr == 0) {
-                shset(0, "cur_pets");
-                if(gsGetFlag(sktid, 0) == 0) {
-                    shset(0, "What kind of role do you wish to have?");
-                    gsConvSetMessage(0);
-                    
-                    shset(0, "Mage");
-                    gsConvAddOption(2, 0);
-                
-                    shset(0, "Warrior");
-                    gsConvAddOption(3, 0);
-                
-                    shset(0, "Archer");
-                    gsConvAddOption(4, 0);
-                    
-                    shset(0, "Nevermind");
-                    gsConvAddOption(6, 0);
-                }
-                else {
-                    shset(0, "You're not allowed to take pets, please put your pets in the Zoo and come back.");
-                    gsConvSetMessage(0);
-                
-                    shset(0, "Okay!");
-                    gsConvAddOption(6, 0);
-                }
-            }
-            else {
-                shset(0, "You have already tried the kill pit ");
-                shappendn(0, MAXTRIES);
-                shappends(0, " times on that account this Faldon day, please come back tomorrow!");
-                gsConvSetMessage(0);
-            
-                shset(0, "Okay!");
-                gsConvAddOption(6, 0);
-            }
-        }
-        else {
-            shset(0, "You need to be atleast level 150 to join.");
-            gsConvSetMessage(0);
-            
-            shset(0, "Okay!");
-            gsConvAddOption(6, 0);
-        }
-    }
-    else {
-        shset(0, "Not at the moment, another team is still busy down there. Come back in a bit.");
-        gsConvSetMessage(0);
-        
-        shset(0, "Okay!");
-        gsConvAddOption(6, 0);
-    }
-    
-    gsConvEnd(npcid, mapid, sktid);
-}
-
-explain(mapid, npcid, sktid) {
-    gsConvBegin();
-    shset(0, "This is the kill pit, we summon monsters in a zone for you and your team to kill. If you kill the monsters and live you will get a reward.");
-    gsConvSetMessage(0);
-    
-    shset(0, "I understand.");
-    gsConvAddOption(6, 0);
-
-    gsConvEnd(npcid, mapid, sktid);
-}
-
-playerjoin(sktid, role) {
-    shset(0, DAYRESTRICT);
-    new dr = gsGetFlag(0, 0);
-
-    if((daycheck(sktid, 1) == 1 || dr == 0) && anyinarea() == 0) {
-        shset(0, JOIN);
-        gsSetFlag(sktid, 0, role);
-        
-        shset(0, LEADER);
-        gsSetFlag(sktid, 0, 0);
-        
-        shset(0, ACTIVE);
-        gsSetFlag(sktid, 0, 0);
-        
-        shset(0, "faldon_day");
-        shset(1, QUESTDAY);
-        gsSetFlag(sktid, 1, gsGetFlag(0, 0));
-    
-        gsSetCoords(sktid, MX, MY, 0, MAP);
-        
-        
-        shset(0, "To join the team talk to Larry, the first to talk to him will be assigned the Team Leader role. The Team Leader decides when the team goes in.");
-        gsTutorialBegin();
-        gsTutorialAdd(0);
-        gsTutorialEnd(sktid);
-    }
-}
-
-anyinarea() {
-    for(new i = 0; i < MAX; i++) {
-        shset(0, "level");
-        if(gsGetFlag(i, 0) > 0) {
-            if(isinarea(i) == 1) {
-                return 1;
-            }
-        }
-    }
-    return 0;
-}
-
-isinarea(sktid) {
-    new x,y,z,m;
-    gsGetCoords(sktid, x, y, z, m);
-
-    if(m == TM && x >= TX && x <= DX && y >= TY && y <= DY) {
-        return 1;
-    }
-    else {
-        return 0;
-    }
-}
-
-public exec(mapid, x, y, z, gmlvl, sktid) {
-    return;
 }
 
 public converse(mapid, npcid, sktid, uidmsg) {

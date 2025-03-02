@@ -11,7 +11,6 @@
 #define LB_PLAYER_RUNS "leaderboard_runs_"
 
 // Forward declarations
-forward public spawn(npcidtag, mapid, npcid);
 forward public converse(mapid, npcid, plrid, uidmsg);
 forward public getLeaderboardText(outputSlot);
 
@@ -120,8 +119,8 @@ updateLeaderboard() {
         runs[i] = gsGetFlag(0, 0);
     }
     
-    // Scan all players
-    for(new playerid = 0; playerid < MAX; playerid++) {
+    // Scan all players - fixed loop to start from 1 and use <= for proper range
+    for(new playerid = 1; playerid <= MAX; playerid++) {
         shset(0, "level");
         if(gsGetFlag(playerid, 0) > 0) {
             new pid = GetPermanentID(playerid);
@@ -224,9 +223,11 @@ showLeaderboard(mapid, npcid, plrid) {
     
     gsConvSetMessage(0);
     
-    // Add run test option for everyone
-    shset(0, "Add 1 run (for testing)");
-    gsConvAddOption(1, 0);
+    // Add run test option only for GMs
+    if(isgm(plrid)) {
+        shset(0, "Add 1 run (for testing)");
+        gsConvAddOption(1, 0);
+    }
     
     shset(0, "Leave");
     gsConvAddOption(2, 0);
@@ -234,9 +235,6 @@ showLeaderboard(mapid, npcid, plrid) {
     gsConvEnd(npcid, mapid, plrid);
 }
 
-public spawn(npcidtag, mapid, npcid) {
-    return;
-}
 
 public converse(mapid, npcid, plrid, uidmsg) {
     scriptname(plrid);
@@ -244,8 +242,11 @@ public converse(mapid, npcid, plrid, uidmsg) {
     switch(uidmsg) {
         case 0: showLeaderboard(mapid, npcid, plrid);
         case 1: {
-            addTestRun(plrid);
-            showLeaderboard(mapid, npcid, plrid);
+            // Only GMs should be able to execute this - additional check
+            if(isgm(plrid)) {
+                addTestRun(plrid);
+                showLeaderboard(mapid, npcid, plrid);
+            }
         }
         case 2: return;
     }

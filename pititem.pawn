@@ -3,7 +3,6 @@
 
 #define SCRIPTNAME "pititem"
 
-// Forward declarations
 forward OnScriptInit();
 forward GetBurningPieces(plrid);
 forward GetDamageBonus(plrid, damageType);
@@ -28,6 +27,7 @@ forward HasWeaponType(plrid, const weapons[], size);
 forward ModifyIncomingDamage(plrid, damage, damageType);
 forward ModifyOutgoingDamage(plrid, damage, damageType);
 forward ShouldRankUp(plrid);
+forward GetEquippedSets(plrid, &burning, &mithril, &master, &masterMage, &masterBow, &holy, &arctic, &blood, &legend, &golden, &skullBlade, &luckBracelet, &mageWeapon, &bowWeapon);
 
 // Equipment Slots
 #define SLOT_WEAPON "weapon"
@@ -87,11 +87,6 @@ new MAGE_WEAPONS[] = {
 new BOW_WEAPONS[] = {
     178, 214, 246, 247, 261, 431
 };
-
-// Entry point (required)
-public OnScriptInit() {
-    return 1;
-}
 
 // Core equipment checking
 public GetEquippedItem(plrid, slot[]) {
@@ -204,6 +199,25 @@ public GetMithrilPieces(plrid) {
     return count;
 }
 
+// New function to get all set statuses at once
+public GetEquippedSets(plrid, &burning, &mithril, &master, &masterMage, &masterBow, &holy, &arctic, &blood, &legend, &golden, &skullBlade, &luckBracelet, &mageWeapon, &bowWeapon) {
+    burning = HasBurningSet(plrid);
+    mithril = HasMithrilSet(plrid);
+    master = HasMasterSet(plrid);
+    masterMage = HasMasterMageSet(plrid);
+    masterBow = HasMasterBowSet(plrid);
+    holy = HasHolySet(plrid);
+    arctic = HasArcticSet(plrid);
+    blood = HasBloodSet(plrid);
+    legend = HasLegendSet(plrid);
+    golden = HasGoldenSet(plrid);
+    skullBlade = HasSkullBlade(plrid);
+    luckBracelet = HasLuckBracelet(plrid);
+    mageWeapon = HasMageWeapon(plrid);
+    bowWeapon = HasBowWeapon(plrid);
+    return 1;
+}
+
 // Bonus calculation functions
 public GetResistanceBonus(plrid, damageType) {
     new bonus = 0;
@@ -264,3 +278,4 @@ public ShouldRankUp(plrid) {
     if(!HasLuckBracelet(plrid)) return 0;
     return gsRandom(1, 100) <= 15;  // 15% chance with just Luck Bracelet
 }
+
